@@ -1,4 +1,4 @@
-// server/index.js —— Express 聚合代理：对外只暴露 /api/search
+// server/index.js —— Express 聚合代理：对外只暴露一个 /api/search
 import express from 'express';
 import cors from 'cors';
 import { searchGitHub, searchStackOverflow, searchWikipedia, searchHackerNews, searchMock } from './sources.js';
@@ -15,20 +15,7 @@ const REGISTRY = {
   mock: searchMock,
 };
 
-// 根路由：服务说明书（而不是冷冰冰的 Cannot GET /）
-app.get('/', (req, res) => {
-  res.json({
-    service: 'InfoHub API',
-    version: '1.0.0',
-    endpoints: {
-      health: 'GET /api/health',
-      search: 'GET /api/search?q=关键词（可选 &source=github,wikipedia）',
-    },
-    sources: Object.keys(REGISTRY),
-  });
-});
-
-// 健康检查：监控打点和云端部署验收都用它
+// 健康检查：D6 云端部署后用来确认服务活着
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, uptime: Math.round(process.uptime()) });
 });
@@ -38,13 +25,8 @@ app.get('/api/search', async (req, res) => {
   const q = String(req.query.q || '').trim().replace(/\s+/g, ' ').slice(0, 60);
   if(!q) return res.status(400).json({ error: '缺少关键词 q' });
 
-  // 可选参数 source：允许只查部分源（为前端按源检索和未来 AI 工具调用预留）
-  const wanted = String(req.query.source || '')
-    .split(',').map(s => s.trim()).filter(Boolean)
-    .filter(s => REGISTRY[s]);
-  const keys = wanted.length ? wanted : Object.keys(REGISTRY);
-
   const start = Date.now();
+  const keys = Object.keys(REGISTRY);
   const settled = await Promise.allSettled(keys.map(key => REGISTRY[key](q)));
 
   const sources = {};
@@ -61,11 +43,6 @@ app.get('/api/search', async (req, res) => {
   });
 
   res.json({ query: q, took_ms: Date.now() - start, sources });
-});
-
-// 404 兜底：所有未注册路径统一返回 JSON（替代 Express 默认的 Cannot GET x 文本）
-app.use((req, res) => {
-  res.status(404).json({ error: '路由不存在', hint: '查看 / 获取可用端点列表' });
 });
 
 const PORT = process.env.PORT || 3000;
