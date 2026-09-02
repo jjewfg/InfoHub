@@ -4,14 +4,21 @@
   "version": "0.2.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "dev": "concurrently -n WEB,API -c blue,green \"vite\" \"node server/index.js\"",
+  "dev:web": "vite",
+  "dev:api": "node server/index.js",
+  "build": "vite build",
+  "preview": "vite preview",
+  "test": "vitest run",
+  "test:watch": "vitest"
   },
   "devDependencies": {
+    "concurrently": "^10.0.5",
     "vite": "^8.2.2",
     "vitest": "^4.1.11"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1"
   }
 }
