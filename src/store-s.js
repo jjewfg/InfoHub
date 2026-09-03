@@ -1,4 +1,4 @@
-// store.js —— 应用状态 + localStorage 持久化 + 匿名设备 ID
+// store.js —— 应用状态的唯一来源 + localStorage 持久化
 export function load(key, fallback){
   try{ const v = JSON.parse(localStorage.getItem(key)); return Array.isArray(v) ? v : fallback; }
   catch{ return fallback; }
@@ -6,16 +6,6 @@ export function load(key, fallback){
 
 export function save(key, val){
   try{ localStorage.setItem(key, JSON.stringify(val)); }catch{ /* 隐身模式等场景下静默降级 */ }
-}
-
-// 匿名设备 ID：云同步的"临时身份证"（账号系统的 MVP 替代品）
-export function getUid(){
-  let uid = localStorage.getItem('infohub.uid');
-  if(!uid){
-    uid = crypto.randomUUID();
-    localStorage.setItem('infohub.uid', uid);
-  }
-  return uid;
 }
 
 export const store = {
@@ -28,7 +18,7 @@ export const store = {
   statuses: {},
   activeFilter: 'all',
   sortMode: 'relevance',
-  favs: load('infohub.favs', []), // localStorage 作为离线兜底，启动后由云端数据覆盖
+  favs: load('infohub.favs', []),
   history: load('infohub.history', []),
 };
 

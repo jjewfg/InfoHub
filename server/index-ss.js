@@ -1,18 +1,13 @@
-// server/index.js —— Express 聚合代理 + 数据库 + 一体化静态服务
+// server/index.js —— Express 聚合代理 + 数据库持久化
 import express from 'express';
 import cors from 'cors';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { searchGitHub, searchStackOverflow, searchWikipedia, searchHackerNews, searchMock } from './sources.js';
 import { readError } from '../src/logic.js';
 import { stmts } from './db.js';
 
 const app = express();
 app.use(cors());
-app.use(express.json());
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const distDir = join(__dirname, '..', 'dist');
+app.use(express.json()); // 解析 POST 请求的 JSON body——不加它，req.body 永远是 undefined（新手大坑）
 
 const REGISTRY = {
   github: searchGitHub,
@@ -22,36 +17,33 @@ const REGISTRY = {
   mock: searchMock,
 };
 
+// 把数据库行还原成前端卡片结构
 function rowToCard(r){
   let tags = [];
   try{ tags = JSON.parse(r.tags || '[]'); }catch{}
   return { id: r.card_id, source: r.source, title: r.title, summary: r.summary, url: r.url, time: r.time, tags, metrics: [] };
 }
 
-const docs = {
-  service: 'InfoHub API',
-  version: '1.2.0',
-  endpoints: {
-    health: 'GET /api/health',
-    search: 'GET /api/search?q=关键词（可选 &source=github,wikipedia）',
-    favorites: 'GET /api/favorites?uid=xx | POST /api/favorites | DELETE /api/favorites?uid=xx&cardId=xx',
-    hot: 'GET /api/hot',
-  },
-  sources: Object.keys(REGISTRY),
-};
-
-// 静态前端：Docker 一体化模式下 '/' 直接打开应用
-// （在 Render 上 dist 目录不存在，这一行自动变成空操作，回退到下面的 JSON 说明——同一份代码，两种形态）
-// 注意顺序：Express 按注册顺序匹配，静态服务在前才有资格接住 '/' 
-app.use(express.static(distDir));
-
-app.get('/', (req, res) => res.json(docs));
-app.get('/api', (req, res) => res.json(docs));
+// 根路由：服务说明书
+app.get('/', (req, res) => {
+  res.json({
+    service: 'InfoHub API',
+    version: '1.1.0',
+    endpoints: {
+      health: 'GET /api/health',
+      search: 'GET /api/search?q=关键词（可选 &source=github,wikipedia）',
+      favorites: 'GET /api/favorites?uid=xx | POST /api/favorites | DELETE /api/favorites?uid=xx&cardId=xx',
+      hot: 'GET /api/hot',
+    },
+    sources: Object.keys(REGISTRY),
+  });
+});
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, uptime: Math.round(process.uptime()) });
 });
 
+/* ---------- 收藏三件套 ---------- */
 app.get('/api/favorites', (req, res) => {
   const uid = String(req.query.uid || '').trim();
   if(!uid) return res.status(400).json({ error: '缺少 uid' });
@@ -80,10 +72,12 @@ app.delete('/api/favorites', (req, res) => {
   res.json({ ok: true, deleted: info.changes });
 });
 
+/* ---------- 热搜榜：全网搜索关键词统计 ---------- */
 app.get('/api/hot', (req, res) => {
   res.json({ hot: stmts.hot.all() });
 });
 
+/* ---------- 聚合搜索（顺带记录关键词） ---------- */
 app.get('/api/search', async (req, res) => {
   const q = String(req.query.q || '').trim().replace(/\s+/g, ' ').slice(0, 60);
   if(!q) return res.status(400).json({ error: '缺少关键词 q' });
@@ -113,7 +107,7 @@ app.get('/api/search', async (req, res) => {
 });
 
 app.use((req, res) => {
-  res.status(404).json({ error: '路由不存在', hint: '查看 / 或 /api 获取可用端点列表' });
+  res.status(404).json({ error: '路由不存在', hint: '查看 / 获取可用端点列表' });
 });
 
 const PORT = process.env.PORT || 3000;

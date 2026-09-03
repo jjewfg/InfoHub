@@ -1,12 +1,12 @@
-// main.js —— 入口模块：启动、事件绑定、云同步（乐观更新 + 失败回滚）
+// main.js —— 入口模块：程序从这里启动，串联各层并绑定事件
 import { $, $$, toast } from './utils.js';
-import { store, save, getUid } from './store.js';
+import { store, save } from './store.js';
 import { SOURCES } from './sources.js';
 import { dedup } from './logic.js';
 import { renderStatusRow, renderAll } from './render.js';
 
-const API = '/api';
-const uid = getUid();
+// API 地址：开发环境走 Vite 代理的相对路径；生产环境用环境变量注入真实后端地址（D6 生效）
+const API = import.meta.env.VITE_API_BASE || '/api';
 
 /* ---------- 骨架屏 ---------- */
 function showSkeleton(){
@@ -19,39 +19,7 @@ function showSkeleton(){
   ).join('');
 }
 
-/* ---------- 云同步：启动时拉取收藏 ---------- */
-async function initFavs(){
-  try{
-    const res = await fetch(`${API}/favorites?uid=${encodeURIComponent(uid)}`);
-    if(!res.ok) throw new Error();
-    const data = await res.json();
-    // 云端是唯一真相源：只要响应成功，无论空与否都覆盖本地
-    // （空列表同样覆盖——否则云端数据蒸发后，本地缓存会"诈尸"）
-    if(Array.isArray(data.cards)){
-      store.favs = data.cards;
-      save('infohub.favs', store.favs);
-      renderAll();
-    }
-  }catch{ /* 静默降级：后端不可达时才用 localStorage 兜底 */ }
-}
-
-/* ---------- 云同步：热搜榜 ---------- */
-async function loadHot(){
-  try{
-    const res = await fetch(`${API}/hot`);
-    if(!res.ok) throw new Error();
-    const data = await res.json();
-    const row = $('#hotRow');
-    if(!data.hot || !data.hot.length){ row.hidden = true; return; }
-    row.innerHTML = '<span>全网热搜：</span>' +
-      data.hot.slice(0, 8).map(h =>
-        `<button type="button" class="example" data-q="${h.q}">${h.q} <small style="color:#9ca3af">${h.cnt}次</small></button>`
-      ).join('');
-    row.hidden = false;
-  }catch{ /* 热榜是增强功能，失败完全静默 */ }
-}
-
-/* ---------- 搜索主流程 ---------- */
+/* ---------- 搜索主流程（v1.0：改为调用后端聚合接口） ---------- */
 async function runSearch(raw){
   const kw = String(raw || '').trim().replace(/\s+/g, ' ');
   if(!kw){ toast('请输入搜索关键词', 'error'); $('#searchInput').focus(); return; }
@@ -88,12 +56,12 @@ async function runSearch(raw){
 
     store.results = dedup(merged);
     store.dedupRemoved = merged.length - store.results.length;
-    loadHot(); // 搜索后热榜可能变化，顺手刷新
   }catch(err){
+    // 后端整个不可达：所有源标错，前端兜底
     Object.keys(SOURCES).forEach(key => {
       store.statuses[key] = { status: 'error', message: '后端不可达' };
     });
-    toast('聚合服务暂不可用，请稍后再试', 'error');
+    toast('聚合服务暂不可用，请确认后端已启动', 'error');
   }finally{
     store.searching = false;
     $('#searchBtn').disabled = false;
@@ -106,41 +74,22 @@ async function runSearch(raw){
   }
 }
 
-/* ---------- 收藏：乐观更新 + 失败回滚 ---------- */
-async function toggleFav(id){
+/* ---------- 收藏 / 历史 / 视图 ---------- */
+function toggleFav(id){
   const idx = store.favs.findIndex(f => f.id === id);
-  const wasFav = idx > -1;
-  const card = wasFav ? store.favs[idx] : store.results.find(c => c.id === id);
-  if(!card) return;
-
-  // 第一步：乐观更新——先改本地状态和界面，不等网络
-  if(wasFav) store.favs.splice(idx, 1);
-  else store.favs.unshift(card);
-  renderAll();
-
-  // 第二步：后台同步云端
-  try{
-    const res = wasFav
-      ? await fetch(`${API}/favorites?uid=${encodeURIComponent(uid)}&cardId=${encodeURIComponent(id)}`, { method: 'DELETE' })
-      : await fetch(`${API}/favorites`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uid, card }),
-        });
-    if(!res.ok) throw new Error();
-    save('infohub.favs', store.favs);
-    toast(wasFav ? '已取消收藏（已同步云端）' : '已加入收藏夹（已同步云端）', 'success');
-  }catch{
-    // 第三步：同步失败——回滚到操作前状态，界面绝不撒谎
-    if(wasFav) store.favs.unshift(card);
-    else store.favs.shift();
-    save('infohub.favs', store.favs);
-    renderAll();
-    toast('云端同步失败，已回滚本地操作', 'error');
+  if(idx > -1){
+    store.favs.splice(idx, 1);
+    toast('已取消收藏', 'info');
+  }else{
+    const card = store.results.find(c => c.id === id);
+    if(!card) return;
+    store.favs.unshift(card);
+    toast('已加入收藏夹', 'success');
   }
+  save('infohub.favs', store.favs);
+  renderAll();
 }
 
-/* ---------- 本地历史（与云端热搜双轨并存） ---------- */
 function addHistory(q){
   store.history = store.history.filter(h => h.q.toLowerCase() !== q.toLowerCase());
   store.history.unshift({ q, ts: Date.now() });
@@ -164,13 +113,10 @@ $('#searchInput').addEventListener('input', e => {
   $('#charCount').textContent = len + '/60';
   $('#charCount').style.color = len > 50 ? 'var(--danger)' : '';
 });
-// 示例词与热搜词统一委托：点谁搜谁
-document.querySelector('.search-card').addEventListener('click', e => {
-  const btn = e.target.closest('[data-q]');
-  if(btn && (btn.classList.contains('example') || btn.closest('#hotRow'))){
-    runSearch(btn.dataset.q);
-  }
-});
+$$('.example').forEach(b => b.addEventListener('click', () => {
+  $('#searchInput').value = b.dataset.q;
+  runSearch(b.dataset.q);
+}));
 $('#sortSelect').addEventListener('change', e => { store.sortMode = e.target.value; renderAll(); });
 $('#filterChips').addEventListener('click', e => {
   const chip = e.target.closest('.f-chip');
@@ -198,7 +144,7 @@ $('#historyList').addEventListener('click', e => {
     return;
   }
   const item = e.target.closest('.history-item');
-  if(item) runSearch(item.dataset.q);
+  if(item){ $('#searchInput').value = item.dataset.q; runSearch(item.dataset.q); }
 });
 $('#clearHistory').addEventListener('click', () => {
   store.history = [];
@@ -210,5 +156,3 @@ $$('.views button').forEach(b => b.addEventListener('click', () => showView(b.da
 
 /* ---------- 启动 ---------- */
 renderAll();
-initFavs();
-loadHot();

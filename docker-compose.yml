@@ -1,0 +1,15 @@
+version: '3.8'
+services:
+  app:
+    image: infohub-app
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - infohub-data:/app/data
+    environment:
+      - NODE_ENV=production
+
+volumes:
+  infohub-data:
+    driver: local
