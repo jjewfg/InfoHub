@@ -176,8 +176,7 @@ ${sources}
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('
-');
+      const lines = buffer.split('\n');
       buffer = lines.pop() || '';
 
       for (const line of lines) {
@@ -185,9 +184,7 @@ ${sources}
         if (!trimmed.startsWith('data: ')) continue;
         const payload = trimmed.slice(6).trim();
         if (payload === '[DONE]') {
-          res.write('data: [DONE]
-
-');
+          res.write('data: [DONE]');
           continue;
         }
         try {
