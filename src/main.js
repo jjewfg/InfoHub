@@ -97,7 +97,6 @@ async function runSearch(raw){
   }finally{
     store.searching = false;
     $('#searchBtn').disabled = false;
-    store.lastResults = merged;
     renderAll();
   }
 
@@ -213,63 +212,3 @@ $$('.views button').forEach(b => b.addEventListener('click', () => showView(b.da
 renderAll();
 initFavs();
 loadHot();
-
-// AI 摘要按钮
-$('#aiSummaryBtn')?.addEventListener('click', async () => {
-  const btn = $('#aiSummaryBtn');
-  const output = $('#aiSummaryOutput');
-  if (!store.lastResults || store.lastResults.length === 0) {
-    toast('请先搜索获取结果', 'error');
-    return;
-  }
-  btn.disabled = true;
-  btn.textContent = 'AI 分析中...';
-  output.innerHTML = '';
-  $('#aiSummaryArea').hidden = false;
-
-  try {
-    const res = await fetch('/api/summarize', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: store.keyword, results: store.lastResults }),
-    });
-    if (!res.ok) throw new Error('后端返回 ' + res.status);
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const payload = line.slice(6).trim();
-        if (payload === '[DONE]') {
-          btn.disabled = false;
-          btn.textContent = 'AI 摘要';
-          return;
-        }
-        try {
-          const parsed = JSON.parse(payload);
-          if (parsed.error) {
-            output.innerHTML = `<div class="summary-error">${parsed.error}</div>`;
-            btn.disabled = false;
-            btn.textContent = 'AI 摘要';
-            return;
-          }
-          if (parsed.content) {
-            output.innerHTML += parsed.content;
-          }
-        } catch {}
-      }
-    }
-  } catch (err) {
-    output.innerHTML = `<div class="summary-error">AI 摘要失败：${err.message}</div>`;
-  }
-  btn.disabled = false;
-  btn.textContent = 'AI 摘要';
-});
