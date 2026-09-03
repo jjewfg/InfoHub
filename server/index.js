@@ -122,8 +122,7 @@ app.post('/api/summarize', async (req, res) => {
    来源: ${r.source}
    摘要: ${r.summary || '(无摘要)'}
 `
-  ).join('
-');
+  ).join('\n');
 
   const systemPrompt = '你是一个信息聚合助手。根据用户搜索的关键词和搜索结果，生成一份简洁的摘要报告。'
     + '用中文回答，保持客观，列举主要发现和观点。如果搜索结果不足，如实说明。';
