@@ -87,6 +87,7 @@ async function runSearch(raw){
     });
 
     store.results = dedup(merged);
+    store.lastResults = merged;    // ← 插入这一行
     store.dedupRemoved = merged.length - store.results.length;
     loadHot(); // 搜索后热榜可能变化，顺手刷新
   }catch(err){
@@ -212,3 +213,48 @@ $$('.views button').forEach(b => b.addEventListener('click', () => showView(b.da
 renderAll();
 initFavs();
 loadHot();
+// AI 摘要
+// AI 摘要
+const LF = String.fromCharCode(10); // 换行符
+$('#aiSummaryBtn')?.addEventListener('click', async () => {
+  const btn = $('#aiSummaryBtn');
+  const out = $('#aiSummaryOutput');
+  if (!store.lastResults || !store.lastResults.length) {
+    toast('请先搜索获取结果', 'error'); return;
+  }
+  btn.disabled = true; btn.textContent = 'AI 分析中...';
+  out.textContent = '';
+  try {
+    const r = await fetch('/api/summarize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: store.keyword, results: store.lastResults }),
+    });
+    if (!r.ok) throw new Error('后端返回 ' + r.status);
+    const reader = r.body.getReader(), dec = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split(LF);
+      buf = lines.pop() || '';
+      for (const line of lines) {
+        const t = line.trim();
+        if (!t.startsWith('data: ')) continue;
+        const p = t.slice(6).trim();
+        if (p === '[DONE]') continue;
+        try {
+          const d = JSON.parse(p);
+          if (d.error) out.textContent += '❌ ' + d.error;
+          else if (d.content) out.textContent += d.content;
+        } catch {}
+      }
+    }
+    if (!out.textContent) out.textContent = '（AI 没有返回内容，请把后端终端的 [AI] 日志发给 Tabbit）';
+  } catch (e) {
+    out.textContent = '❌ AI 摘要失败：' + e.message;
+  }
+  btn.disabled = false; btn.textContent = '🤖 AI 摘要';
+});
+
