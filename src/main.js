@@ -1,4 +1,7 @@
 // main.js —— 入口模块：启动、事件绑定、云同步（乐观更新 + 失败回滚）
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
+
 import { $, $$, toast } from './utils.js';
 import { store, save, getUid } from './store.js';
 import { SOURCES } from './sources.js';
@@ -214,8 +217,56 @@ renderAll();
 initFavs();
 loadHot();
 // AI 摘要
-// AI 摘要
+// // AI 摘要
+// const LF = String.fromCharCode(10); // 换行符
+// $('#aiSummaryBtn')?.addEventListener('click', async () => {
+//   const btn = $('#aiSummaryBtn');
+//   const out = $('#aiSummaryOutput');
+//   if (!store.lastResults || !store.lastResults.length) {
+//     toast('请先搜索获取结果', 'error'); return;
+//   }
+//   btn.disabled = true; btn.textContent = 'AI 分析中...';
+//   out.textContent = '';
+//   try {
+//     const api = location.hostname === 'localhost'
+//   ? '/api/summarize'                                                    // 本地：走 Vite 代理（原路不变）
+//   : 'https://infohub-api-117j.onrender.com/api/summarize';             // 线上：直连 Render
+
+//     const r = await fetch(api, {method: 'POST',headers: { 'Content-Type': 'application/json' },body: JSON.stringify({ query: store.keyword, results: store.lastResults }),
+// });
+
+
+//     if (!r.ok) throw new Error('后端返回 ' + r.status);
+//     const reader = r.body.getReader(), dec = new TextDecoder();
+//     let buf = '';
+//     while (true) {
+//       const { done, value } = await reader.read();
+//       if (done) break;
+//       buf += dec.decode(value, { stream: true });
+//       const lines = buf.split(LF);
+//       buf = lines.pop() || '';
+//       for (const line of lines) {
+//         const t = line.trim();
+//         if (!t.startsWith('data: ')) continue;
+//         const p = t.slice(6).trim();
+//         if (p === '[DONE]') continue;
+//         try {
+//           const d = JSON.parse(p);
+//           if (d.error) out.textContent += '❌ ' + d.error;
+//           else if (d.content) out.textContent += d.content;
+//         } catch {}
+//       }
+//     }
+//     if (!out.textContent) out.textContent = '（AI 没有返回内容，请把后端终端的 [AI] 日志发给 Tabbit）';
+//   } catch (e) {
+//     out.textContent = '❌ AI 摘要失败：' + e.message;
+//   }
+//   btn.disabled = false; btn.textContent = '🤖 AI 摘要';
+// });
+// AI 摘要 + 导出检索报告
 const LF = String.fromCharCode(10); // 换行符
+let aiSummaryRaw = '';
+
 $('#aiSummaryBtn')?.addEventListener('click', async () => {
   const btn = $('#aiSummaryBtn');
   const out = $('#aiSummaryOutput');
@@ -223,16 +274,16 @@ $('#aiSummaryBtn')?.addEventListener('click', async () => {
     toast('请先搜索获取结果', 'error'); return;
   }
   btn.disabled = true; btn.textContent = 'AI 分析中...';
-  out.textContent = '';
+  out.innerHTML = ''; aiSummaryRaw = '';
   try {
     const api = location.hostname === 'localhost'
-  ? '/api/summarize'                                                    // 本地：走 Vite 代理（原路不变）
-  : 'https://infohub-api-117j.onrender.com/api/summarize';             // 线上：直连 Render
-
-    const r = await fetch(api, {method: 'POST',headers: { 'Content-Type': 'application/json' },body: JSON.stringify({ query: store.keyword, results: store.lastResults }),
-});
-
-
+      ? '/api/summarize'
+      : 'https://infohub-api-117j.onrender.com/api/summarize';
+    const r = await fetch(api, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: store.keyword, results: store.lastResults }),
+    });
     if (!r.ok) throw new Error('后端返回 ' + r.status);
     const reader = r.body.getReader(), dec = new TextDecoder();
     let buf = '';
@@ -249,15 +300,67 @@ $('#aiSummaryBtn')?.addEventListener('click', async () => {
         if (p === '[DONE]') continue;
         try {
           const d = JSON.parse(p);
-          if (d.error) out.textContent += '❌ ' + d.error;
-          else if (d.content) out.textContent += d.content;
+          if (d.error) {
+            const ed = document.createElement('div');
+            ed.style.color = '#e65c53';
+            ed.textContent = '❌ ' + d.error;
+            out.appendChild(ed);
+          } else if (d.content) {
+            aiSummaryRaw += d.content;
+            out.innerHTML = DOMPurify.sanitize(marked.parse(aiSummaryRaw));
+          }
         } catch {}
       }
     }
-    if (!out.textContent) out.textContent = '（AI 没有返回内容，请把后端终端的 [AI] 日志发给 Tabbit）';
+    if (!aiSummaryRaw) out.innerHTML = '（AI 没有返回内容，请把后端终端的 [AI] 日志发给 Tabbit）';
   } catch (e) {
-    out.textContent = '❌ AI 摘要失败：' + e.message;
+    out.innerHTML = '';
+    const ed = document.createElement('div');
+    ed.style.color = '#e65c53';
+    ed.textContent = '❌ AI 摘要失败：' + e.message;
+    out.appendChild(ed);
   }
   btn.disabled = false; btn.textContent = '🤖 AI 摘要';
+});
+
+// 导出检索报告（Markdown 文件下载）
+$('#exportMdBtn')?.addEventListener('click', () => {
+  if (!store.keyword || !store.lastResults || !store.lastResults.length) {
+    toast('请先搜索获取结果', 'error'); return;
+  }
+  const lines = [];
+  lines.push('# InfoHub 检索报告：' + store.keyword);
+  lines.push('');
+  lines.push('> 导出时间：' + new Date().toLocaleString() + '　｜　共 ' + store.lastResults.length + ' 条结果');
+  if (aiSummaryRaw) {
+    lines.push('');
+    lines.push('## AI 摘要');
+    lines.push('');
+    lines.push(aiSummaryRaw);
+  }
+  lines.push('');
+  lines.push('## 检索结果');
+  store.lastResults.forEach((c, i) => {
+    lines.push('');
+    lines.push('### ' + (i + 1) + '. ' + (c.title || '（无标题）'));
+    lines.push('');
+    const meta = [];
+    if (c.source) meta.push('来源：' + c.source);
+    if (c.time) meta.push('时间：' + c.time);
+    if (c.tags && c.tags.length) meta.push('标签：' + c.tags.join('、'));
+    if (meta.length) lines.push('- ' + meta.join('　｜　'));
+    if (c.url) lines.push('- 链接：' + c.url);
+    if (c.summary) lines.push('- 摘要：' + c.summary);
+  });
+  const safe = ['\\', '/', ':', '*', '?', '"', '<', '>', '|', ' '].reduce(
+    (s, ch) => s.split(ch).join('_'), store.keyword
+  );
+  const blob = new Blob([lines.join(LF)], { type: 'text/markdown;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'infohub-' + safe + '.md';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('已导出 Markdown 检索报告');
 });
 

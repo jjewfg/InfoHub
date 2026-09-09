@@ -132,7 +132,8 @@ app.post('/api/summarize', async (req, res) => {
     `[${i+1}] ${r.title} 来源:${r.source} 摘要:${r.summary || '(无)'}`
   ).join(NL);
 
-  const sys = '你是一个信息聚合助手。根据搜索关键词和结果生成简洁的中文摘要，保持客观，结果不足则如实说明。';
+  // const sys = '你是一个信息聚合助手。根据搜索关键词和结果生成简洁的中文摘要，保持客观，结果不足则如实说明。';
+  const sys = '你是一个信息聚合助手。根据搜索关键词和结果生成简洁的中文摘要报告，使用 Markdown 格式（分点、小标题、重点加粗），保持客观，结果不足则如实说明。';
   const usr = `关键词: "${query}"${NL}搜索结果:${NL}${src}${NL}请生成摘要报告。`;
 
   res.writeHead(200, {
