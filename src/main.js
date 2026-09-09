@@ -323,6 +323,15 @@ $('#aiSummaryBtn')?.addEventListener('click', async () => {
   btn.disabled = false; btn.textContent = '🤖 AI 摘要';
 });
 
+function fmtTime(t) {
+  if (!t) return '';
+  const n = Number(t);
+  if (!isNaN(n) && String(n).length >= 10) {
+    return new Date(n < 1e12 ? n * 1000 : n).toLocaleDateString('zh-CN');
+  }
+  return String(t);
+}
+
 // 导出检索报告（Markdown 文件下载）
 $('#exportMdBtn')?.addEventListener('click', () => {
   if (!store.keyword || !store.lastResults || !store.lastResults.length) {
@@ -346,7 +355,7 @@ $('#exportMdBtn')?.addEventListener('click', () => {
     lines.push('');
     const meta = [];
     if (c.source) meta.push('来源：' + c.source);
-    if (c.time) meta.push('时间：' + c.time);
+    if (c.time) meta.push('时间：' + fmtTime(c.time));
     if (c.tags && c.tags.length) meta.push('标签：' + c.tags.join('、'));
     if (meta.length) lines.push('- ' + meta.join('　｜　'));
     if (c.url) lines.push('- 链接：' + c.url);

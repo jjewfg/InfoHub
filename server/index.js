@@ -149,7 +149,7 @@ app.post('/api/summarize', async (req, res) => {
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'Qwen/Qwen2.5-7B-Instruct',
+        model: 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B',
         messages: [
           { role: 'system', content: sys },
           { role: 'user', content: usr },
