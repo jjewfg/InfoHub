@@ -225,11 +225,14 @@ $('#aiSummaryBtn')?.addEventListener('click', async () => {
   btn.disabled = true; btn.textContent = 'AI 分析中...';
   out.textContent = '';
   try {
-    const r = await fetch('/api/summarize', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: store.keyword, results: store.lastResults }),
-    });
+    const api = location.hostname === 'localhost'
+  ? '/api/summarize'                                                    // 本地：走 Vite 代理（原路不变）
+  : 'https://infohub-api-1i17j.onrender.com/api/summarize';             // 线上：直连 Render
+
+    const r = await fetch(api, {method: 'POST',headers: { 'Content-Type': 'application/json' },body: JSON.stringify({ query: store.keyword, results: store.lastResults }),
+});
+
+
     if (!r.ok) throw new Error('后端返回 ' + r.status);
     const reader = r.body.getReader(), dec = new TextDecoder();
     let buf = '';
