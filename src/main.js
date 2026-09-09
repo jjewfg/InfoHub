@@ -39,6 +39,21 @@ async function initFavs(){
 }
 
 /* ---------- 云同步：热搜榜 ---------- */
+// async function loadHot(){
+//   try{
+//     const res = await fetch(`${API}/hot`);
+//     if(!res.ok) throw new Error();
+//     const data = await res.json();
+//     const row = $('#hotRow');
+//     if(!data.hot || !data.hot.length){ row.hidden = true; return; }
+//     row.innerHTML = '<span>全网热搜：</span>' +
+//       data.hot.slice(0, 8).map(h =>
+//         `<button type="button" class="example" data-q="${h.q}">${h.q} <small style="color:#9ca3af">${h.cnt}次</small></button>`
+//       ).join('');
+//     row.hidden = false;
+//   }catch{ /* 热榜是增强功能，失败完全静默 */ }
+// }
+
 async function loadHot(){
   try{
     const res = await fetch(`${API}/hot`);
@@ -46,10 +61,16 @@ async function loadHot(){
     const data = await res.json();
     const row = $('#hotRow');
     if(!data.hot || !data.hot.length){ row.hidden = true; return; }
-    row.innerHTML = '<span>全网热搜：</span>' +
-      data.hot.slice(0, 8).map(h =>
-        `<button type="button" class="example" data-q="${h.q}">${h.q} <small style="color:#9ca3af">${h.cnt}次</small></button>`
-      ).join('');
+    const list = data.hot.slice(0, 12);
+    const max = Math.max(...list.map(h => h.cnt));
+    const min = Math.min(...list.map(h => h.cnt));
+    const span = Math.max(max - min, 1);
+    row.innerHTML = '<span>全网热搜：</span>' + list.map(h => {
+      const t = (h.cnt - min) / span;
+      const size = (12 + t * 8).toFixed(1);
+      const op = (0.65 + t * 0.35).toFixed(2);
+      return `<button type="button" class="example" data-q="${h.q}" style="font-size:${size}px;opacity:${op}">${h.q} <small style="color:#9ca3af">${h.cnt}次</small></button>`;
+    }).join('');
     row.hidden = false;
   }catch{ /* 热榜是增强功能，失败完全静默 */ }
 }

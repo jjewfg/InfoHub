@@ -5,4 +5,5 @@ export const SOURCES = {
   wikipedia:     { name: '维基百科（中文）',   dot: '#3366cc' },
   hackernews:    { name: 'Hacker News',      dot: '#ff6600' },
   mock:          { name: '本地模拟库',         dot: '#10b981' },
+  bilibili:      { name: 'B站', dot: '#fb7299' },
 };

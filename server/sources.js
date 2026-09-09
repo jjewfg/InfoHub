@@ -92,3 +92,38 @@ export async function searchMock(q){
     .slice(0, 8)
     .map(item => normalizeCard({ ...item, source: 'mock' }));
 }
+// B站视频搜索（游客身份：先领 buvid cookie 过风控握手，再调搜索接口）
+const BILI_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
+function fmtNum(n){ n = Number(n) || 0; return n >= 1e8 ? (n/1e8).toFixed(1)+'亿' : n >= 1e4 ? (n/1e4).toFixed(1)+'万' : String(n); }
+
+export async function searchBilibili(q){
+  const spi = await fetch('https://api.bilibili.com/x/frontend/finger/spi', {
+    headers: { 'User-Agent': BILI_UA, 'Referer': 'https://www.bilibili.com/' },
+    signal: AbortSignal.timeout(8000),
+  }).then(r => r.json());
+  const b3 = spi?.data?.b_3 || '';
+  const b4 = spi?.data?.b_4 || '';
+  if (!b3) throw new Error('B站风控握手失败');
+
+  const url = 'https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword=' + encodeURIComponent(q);
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': BILI_UA,
+      'Referer': 'https://www.bilibili.com/',
+      'Cookie': `buvid3=${b3}; buvid4=${b4}`,
+    },
+    signal: AbortSignal.timeout(8000),
+  }).then(r => r.json());
+  if (res.code !== 0) throw new Error('B站接口返回 ' + res.code);
+
+  const list = res.data?.result || [];
+  return list.slice(0, 8).map(v => ({
+    id: 'bili-' + v.bvid,
+    source: 'bilibili',
+    title: String(v.title || '').replace(/<[^>]+>/g, ''),
+    summary: fmtNum(v.play) + '播放 · UP主:' + (v.author || '未知'),
+    url: 'https://www.bilibili.com/video/' + v.bvid,
+    time: v.pubdate ? v.pubdate * 1000 : null,
+    tags: ['视频'],
+  }));
+}

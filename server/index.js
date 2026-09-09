@@ -4,7 +4,9 @@ import express from 'express';
 import cors from 'cors';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { searchGitHub, searchStackOverflow, searchWikipedia, searchHackerNews, searchMock } from './sources.js';
+// import { searchGitHub, searchStackOverflow, searchWikipedia, searchHackerNews, searchMock } from './sources.js';
+import { searchGitHub, searchStackOverflow, searchWikipedia, searchHackerNews, searchMock, searchBilibili } from './sources.js';
+
 import { readError } from '../src/logic.js';
 import { stmts } from './db.js';
 
@@ -21,6 +23,7 @@ const REGISTRY = {
   wikipedia: searchWikipedia,
   hackernews: searchHackerNews,
   mock: searchMock,
+  bilibili: searchBilibili,
 };
 
 function rowToCard(r){
