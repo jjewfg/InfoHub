@@ -227,7 +227,7 @@ $('#aiSummaryBtn')?.addEventListener('click', async () => {
   try {
     const api = location.hostname === 'localhost'
   ? '/api/summarize'                                                    // 本地：走 Vite 代理（原路不变）
-  : 'https://infohub-api-1i17j.onrender.com/api/summarize';             // 线上：直连 Render
+  : 'https://infohub-api-117j.onrender.com/api/summarize';             // 线上：直连 Render
 
     const r = await fetch(api, {method: 'POST',headers: { 'Content-Type': 'application/json' },body: JSON.stringify({ query: store.keyword, results: store.lastResults }),
 });
